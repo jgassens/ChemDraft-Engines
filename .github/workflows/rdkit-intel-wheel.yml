@@ -77,7 +77,7 @@ jobs:
             ${{ env.WORK }}/python
             ${{ env.WORK }}/tools
             ${{ env.WORK }}/cmake
-          key: rdkit-intel-tools-${{ runner.os }}-${{ runner.arch }}-${{ steps.cache-image.outputs.os }}-${{ steps.cache-image.outputs.version }}-target-${{ env.MACOSX_DEPLOYMENT_TARGET }}-${{ hashFiles('scripts/rdkit-intel-wheel/build-tools.sh', 'scripts/rdkit-intel-wheel/check-build.sh') }}-${{ steps.cache-inputs.outputs.tools }}-v1
+          key: rdkit-intel-tools-${{ runner.os }}-${{ runner.arch }}-${{ steps.cache-image.outputs.os }}-${{ steps.cache-image.outputs.version }}-target-${{ env.MACOSX_DEPLOYMENT_TARGET }}-${{ hashFiles('scripts/rdkit-intel-wheel/build-tools.sh', 'scripts/rdkit-intel-wheel/check-build.sh') }}-${{ steps.cache-inputs.outputs.tools }}-v2
           lookup-only: true
 
       - name: Restore exact tool build cache
@@ -125,7 +125,7 @@ jobs:
         uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
         with:
           path: ${{ env.WORK }}/prefix
-          key: rdkit-intel-dependencies-${{ runner.os }}-${{ runner.arch }}-${{ steps.cache-image.outputs.os }}-${{ steps.cache-image.outputs.version }}-target-${{ env.MACOSX_DEPLOYMENT_TARGET }}-${{ hashFiles('scripts/rdkit-intel-wheel/build-deps.sh', 'scripts/rdkit-intel-wheel/check-build.sh') }}-${{ steps.cache-inputs.outputs.dependencies }}-${{ steps.tools-lookup.outputs.cache-primary-key }}-v1
+          key: rdkit-intel-dependencies-${{ runner.os }}-${{ runner.arch }}-${{ steps.cache-image.outputs.os }}-${{ steps.cache-image.outputs.version }}-target-${{ env.MACOSX_DEPLOYMENT_TARGET }}-${{ hashFiles('scripts/rdkit-intel-wheel/build-deps.sh', 'scripts/rdkit-intel-wheel/check-build.sh') }}-${{ steps.cache-inputs.outputs.dependencies }}-${{ steps.tools-lookup.outputs.cache-primary-key }}-v2
           lookup-only: true
 
       - name: Record build cache hits

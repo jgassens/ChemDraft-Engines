@@ -8,12 +8,14 @@ and InChI `v1.07.5` trees.
 The two build caches are an optimisation. One stores the finished CPython,
 tools venv and CMake installs; the other stores the Boost, InChI and Eigen prefix.
 Both keys include the runner OS, architecture, image OS/version, deployment
-target and a manual `-v1` suffix. The tools key hashes `build-tools.sh` and
+target and a manual `-v2` suffix. The tools key hashes `build-tools.sh` and
 `check-build.sh`, plus a SHA-256 of the CPython/CMake source entries and every
 wheel entry in `inputs.json` (all wheels are installed in the tools venv).
 The dependency key hashes `build-deps.sh` and `check-build.sh`, plus a SHA-256
 of the Boost/InChI/Eigen source entries, and includes the full tools cache key.
 Changes to the tool build therefore also invalidate the dependency cache.
+The suffix was bumped to `-v2` for the first release build (2026-11-10), so
+that both caches miss.
 Neither key hashes the workflow or unrelated scripts, so RDKit build,
 packaging, audit and smoke-step edits leave both caches reusable.
 Only an exact key hit permits restoration; there are no restore keys.

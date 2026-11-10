@@ -3,6 +3,36 @@
 Source references below are relative to the upstream RDKit `Release_2026_03_5`
 and InChI `v1.07.5` trees.
 
+## Build caches
+
+The two build caches are an optimisation. One stores the finished CPython,
+tools venv and CMake installs; the other stores the Boost, InChI and Eigen prefix.
+Both keys include the runner OS, architecture, image OS/version, deployment
+target and a manual `-v1` suffix. The tools key hashes `build-tools.sh` and
+`check-build.sh`, plus a SHA-256 of the CPython/CMake source entries and every
+wheel entry in `inputs.json` (all wheels are installed in the tools venv).
+The dependency key hashes `build-deps.sh` and `check-build.sh`, plus a SHA-256
+of the Boost/InChI/Eigen source entries, and includes the full tools cache key.
+Changes to the tool build therefore also invalidate the dependency cache.
+Neither key hashes the workflow or unrelated scripts, so RDKit build,
+packaging, audit and smoke-step edits leave both caches reusable.
+Only an exact key hit permits restoration; there are no restore keys.
+Lookup-only steps reject prefix matches before restoration, and a changed
+match between lookup and restore fails the job before using the build.
+
+Downloads and checksum verification still run every time. Build and verification
+steps remain in the offline sandbox; cache lookup, restore and save steps run
+outside it and transfer only the install folders. Restored Python must report
+`Python 3.12.15`, and the native executables, dylibs and extension modules are
+checked with `lipo -archs` for exactly `x86_64`. Finished builds are checked and
+saved immediately. Eigen staging is part of `build-deps.sh` and the cached
+prefix; the dependency cache is saved before the smoke test moves it.
+
+A release wheel should come from a run with both caches cleared, or with a fresh
+manual key suffix, so it is built end to end. The workflow remains manual
+dispatch only, with `contents: read` and checkout credentials disabled; only
+maintainers can populate its caches.
+
 ## Required inputs
 
 Boost **1.87.0** is selected as the first release with Boost.NumPy support for

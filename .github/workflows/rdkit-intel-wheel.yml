@@ -36,69 +36,133 @@ jobs:
           xcodebuild -version
           xcrun clang --version
 
+      - name: Identify runner image for build caches
+        id: cache-image
+        run: |
+          echo "os=${ImageOS:-unknown}" >> "$GITHUB_OUTPUT"
+          echo "version=${ImageVersion:-unknown}" >> "$GITHUB_OUTPUT"
+
+      - name: Hash inputs for each cached build stage
+        id: cache-inputs
+        run: |
+          node --input-type=module <<'JS'
+          import { createHash } from 'node:crypto';
+          import { appendFileSync, readFileSync } from 'node:fs';
+          const inputs = JSON.parse(readFileSync('scripts/rdkit-intel-wheel/inputs.json', 'utf8'));
+          const stages = {
+            tools: {
+              sources: inputs.sources.filter(({ name }) => ['python', 'cmake'].includes(name)),
+              // fetch.mjs puts all pinned wheels in tools.txt for the tools venv.
+              wheels: inputs.wheels,
+            },
+            dependencies: {
+              sources: inputs.sources.filter(({ name }) => ['boost', 'inchi', 'eigen'].includes(name)),
+            },
+          };
+          for (const [stage, pins] of Object.entries(stages)) {
+            const hash = createHash('sha256').update(JSON.stringify(pins)).digest('hex');
+            appendFileSync(process.env.GITHUB_OUTPUT, `${stage}=${hash}\n`);
+          }
+          JS
+
+      # Hash only each stage's build/verification scripts and relevant input pins.
+      # Look up first: a prefix match must never be restored or used as a build input.
+      - name: Look up exact tool build cache
+        id: tools-lookup
+        uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: |
+            ${{ env.WORK }}/python
+            ${{ env.WORK }}/tools
+            ${{ env.WORK }}/cmake
+          key: rdkit-intel-tools-${{ runner.os }}-${{ runner.arch }}-${{ steps.cache-image.outputs.os }}-${{ steps.cache-image.outputs.version }}-target-${{ env.MACOSX_DEPLOYMENT_TARGET }}-${{ hashFiles('scripts/rdkit-intel-wheel/build-tools.sh', 'scripts/rdkit-intel-wheel/check-build.sh') }}-${{ steps.cache-inputs.outputs.tools }}-v1
+          lookup-only: true
+
+      - name: Restore exact tool build cache
+        id: tools-cache
+        if: steps.tools-lookup.outputs.cache-hit == 'true'
+        uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: |
+            ${{ env.WORK }}/python
+            ${{ env.WORK }}/tools
+            ${{ env.WORK }}/cmake
+          key: ${{ steps.tools-lookup.outputs.cache-primary-key }}
+          fail-on-cache-miss: true
+
       - name: Build pinned CPython 3.12.15 and CMake 4.4.4
+        if: steps.tools-lookup.outputs.cache-hit != 'true'
         shell: bash --noprofile --norc scripts/rdkit-intel-wheel/offline-shell.sh {0}
         run: |
-          # SDK/compiler, curl, make and Node come from the hosted runner; no Homebrew installs.
-          export SDKROOT="$(xcrun --sdk macosx --show-sdk-path)"
-          cd "$WORK/src/python"
-          ./configure --prefix="$WORK/python" --with-ensurepip=install
-          make -j3
-          make install
-          "$WORK/python/bin/python3.12" -m venv "$WORK/tools"
-          "$WORK/tools/bin/python3.12" -m pip install --no-index --require-hashes \
-            --only-binary=:all: --find-links="$WORK/downloads" -r "$WORK/tools.txt"
-          "$WORK/tools/bin/python3.12" -m pip check
-          cd "$WORK/src/cmake"
-          ./bootstrap --prefix="$WORK/cmake" --parallel=3 -- -DCMAKE_USE_OPENSSL=OFF
-          make -j3
-          make install
+          bash scripts/rdkit-intel-wheel/build-tools.sh
+
+      - name: Check tool build and expose tools on PATH
+        shell: bash --noprofile --norc scripts/rdkit-intel-wheel/offline-shell.sh {0}
+        env:
+          LOOKUP_HIT: ${{ steps.tools-lookup.outputs.cache-hit }}
+          RESTORE_HIT: ${{ steps.tools-cache.outputs.cache-hit }}
+        run: |
+          # Fail closed if an exact entry disappears between lookup and restore.
+          if [[ "$LOOKUP_HIT" == true ]]; then test "$RESTORE_HIT" = true; fi
+          bash scripts/rdkit-intel-wheel/check-build.sh tools
           echo "$WORK/tools/bin" >> "$GITHUB_PATH"
           echo "$WORK/cmake/bin" >> "$GITHUB_PATH"
 
-      - name: Build Boost 1.87.0 and InChI 1.07.5
+      - name: Save finished tool build
+        if: steps.tools-lookup.outputs.cache-hit != 'true'
+        uses: actions/cache/save@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: |
+            ${{ env.WORK }}/python
+            ${{ env.WORK }}/tools
+            ${{ env.WORK }}/cmake
+          key: ${{ steps.tools-lookup.outputs.cache-primary-key }}
+
+      - name: Look up exact dependency build cache
+        id: dependencies-lookup
+        uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: ${{ env.WORK }}/prefix
+          key: rdkit-intel-dependencies-${{ runner.os }}-${{ runner.arch }}-${{ steps.cache-image.outputs.os }}-${{ steps.cache-image.outputs.version }}-target-${{ env.MACOSX_DEPLOYMENT_TARGET }}-${{ hashFiles('scripts/rdkit-intel-wheel/build-deps.sh', 'scripts/rdkit-intel-wheel/check-build.sh') }}-${{ steps.cache-inputs.outputs.dependencies }}-${{ steps.tools-lookup.outputs.cache-primary-key }}-v1
+          lookup-only: true
+
+      - name: Restore exact dependency build cache
+        id: dependencies-cache
+        if: steps.dependencies-lookup.outputs.cache-hit == 'true'
+        uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: ${{ env.WORK }}/prefix
+          key: ${{ steps.dependencies-lookup.outputs.cache-primary-key }}
+          fail-on-cache-miss: true
+
+      - name: Build Boost 1.87.0, InChI 1.07.5 and stage Eigen
+        if: steps.dependencies-lookup.outputs.cache-hit != 'true'
         shell: bash --noprofile --norc scripts/rdkit-intel-wheel/offline-shell.sh {0}
         run: |
-          export SDKROOT="$(xcrun --sdk macosx --show-sdk-path)"
-          cd "$WORK/src/boost"
-          ./bootstrap.sh --prefix="$WORK/prefix" --with-toolset=clang \
-            --with-python="$WORK/tools/bin/python3.12" --with-python-version=3.12 \
-            --with-libraries=python,serialization,iostreams,system
-          # Replace bootstrap's venv-derived include path with the base CPython headers.
-          cat > project-config.jam <<EOF
-          using clang ;
-          using python : 3.12 : "$WORK/tools/bin/python3.12" : "$WORK/python/include/python3.12" : "$WORK/python/lib" ;
-          EOF
-          # RDStreams uses gzip even with compressed suppliers disabled. Use only SDK libz.
-          ./b2 -j3 install --prefix="$WORK/prefix" \
-            --with-python --with-serialization --with-iostreams --with-system \
-            toolset=clang variant=release link=shared threading=multi \
-            python=3.12 architecture=x86 address-model=64 \
-            cxxflags="-isysroot $SDKROOT -arch x86_64 -mmacosx-version-min=11.0" \
-            linkflags="-isysroot $SDKROOT -arch x86_64 -mmacosx-version-min=11.0" \
-            -sZLIB_INCLUDE="$SDKROOT/usr/include" -sZLIB_LIBPATH="$SDKROOT/usr/lib" \
-            -sNO_BZIP2=1 -sNO_LZMA=1 -sNO_ZSTD=1
-          cmake -S "$WORK/src/inchi/INCHI-1-SRC/INCHI_API/libinchi/src" -B "$WORK/build-inchi" \
-            -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_FLAGS=-UUSE_TBB_MALLOC \
-            -DCMAKE_OSX_ARCHITECTURES=x86_64 -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 \
-            -DCMAKE_POLICY_VERSION_MINIMUM=3.5
-          cmake --build "$WORK/build-inchi" --target libinchi --parallel 3
-          # The library subproject has no install rules; stage its API and transitive header.
-          mkdir -p "$WORK/prefix/lib" "$WORK/prefix/include/inchi"
-          cp "$WORK/build-inchi/lib/libinchi.dylib" "$WORK/prefix/lib/"
-          for header in inchi_api.h bcf_s.h ixa.h; do
-            cp "$WORK/src/inchi/INCHI-1-SRC/INCHI_BASE/src/$header" "$WORK/prefix/include/inchi/"
-          done
+          bash scripts/rdkit-intel-wheel/build-deps.sh
+
+      - name: Check dependency build
+        shell: bash --noprofile --norc scripts/rdkit-intel-wheel/offline-shell.sh {0}
+        env:
+          LOOKUP_HIT: ${{ steps.dependencies-lookup.outputs.cache-hit }}
+          RESTORE_HIT: ${{ steps.dependencies-cache.outputs.cache-hit }}
+        run: |
+          if [[ "$LOOKUP_HIT" == true ]]; then test "$RESTORE_HIT" = true; fi
+          bash scripts/rdkit-intel-wheel/check-build.sh dependencies
+
+      # Save the complete dependency prefix before the smoke test moves it.
+      - name: Save finished dependency build
+        if: steps.dependencies-lookup.outputs.cache-hit != 'true'
+        uses: actions/cache/save@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: ${{ env.WORK }}/prefix
+          key: ${{ steps.dependencies-lookup.outputs.cache-primary-key }}
 
       - name: Build RDKit from the official source tag
         shell: bash --noprofile --norc scripts/rdkit-intel-wheel/offline-shell.sh {0}
         run: |
           export SDKROOT="$(xcrun --sdk macosx --show-sdk-path)"
           # Required FetchContent sources are staged by fetch.mjs; optional download paths are off.
-          cmake -S "$WORK/src/eigen" -B "$WORK/build-eigen" \
-            -DCMAKE_INSTALL_PREFIX="$WORK/prefix" -DBUILD_TESTING=OFF \
-            -DEIGEN_BUILD_DOC=OFF -DCMAKE_POLICY_VERSION_MINIMUM=3.5
-          cmake --install "$WORK/build-eigen"
           cmake -S "$WORK/src/rdkit" -B "$WORK/build-rdkit" \
             -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=x86_64 \
             -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \

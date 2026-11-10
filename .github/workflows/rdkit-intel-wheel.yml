@@ -37,7 +37,7 @@ jobs:
           xcrun clang --version
 
       - name: Build pinned CPython 3.12.15 and CMake 4.4.4
-        shell: sandbox-exec -f "${{ runner.temp }}/rdkit-intel/offline.sb" /bin/bash --noprofile --norc -e -o pipefail {0}
+        shell: bash --noprofile --norc scripts/rdkit-intel-wheel/offline-shell.sh {0}
         run: |
           # SDK/compiler, curl, make and Node come from the hosted runner; no Homebrew installs.
           export SDKROOT="$(xcrun --sdk macosx --show-sdk-path)"
@@ -57,7 +57,7 @@ jobs:
           echo "$WORK/cmake/bin" >> "$GITHUB_PATH"
 
       - name: Build Boost 1.87.0 and InChI 1.07.5
-        shell: sandbox-exec -f "${{ runner.temp }}/rdkit-intel/offline.sb" /bin/bash --noprofile --norc -e -o pipefail {0}
+        shell: bash --noprofile --norc scripts/rdkit-intel-wheel/offline-shell.sh {0}
         run: |
           export SDKROOT="$(xcrun --sdk macosx --show-sdk-path)"
           cd "$WORK/src/boost"
@@ -89,7 +89,7 @@ jobs:
           done
 
       - name: Build RDKit from the official source tag
-        shell: sandbox-exec -f "${{ runner.temp }}/rdkit-intel/offline.sb" /bin/bash --noprofile --norc -e -o pipefail {0}
+        shell: bash --noprofile --norc scripts/rdkit-intel-wheel/offline-shell.sh {0}
         run: |
           export SDKROOT="$(xcrun --sdk macosx --show-sdk-path)"
           # Required FetchContent sources are staged by fetch.mjs; optional download paths are off.
@@ -134,14 +134,14 @@ jobs:
           python3.12 -m wheel pack "$WORK/wheel" --dest-dir "$WORK/raw"
 
       - name: Bundle dylibs and audit the final wheel
-        shell: sandbox-exec -f "${{ runner.temp }}/rdkit-intel/offline.sb" /bin/bash --noprofile --norc -e -o pipefail {0}
+        shell: bash --noprofile --norc scripts/rdkit-intel-wheel/offline-shell.sh {0}
         run: |
           DYLD_LIBRARY_PATH="$WORK/stage/lib:$WORK/prefix/lib" \
             delocate-wheel --require-archs x86_64 --wheel-dir "$WORK/wheelhouse" "$WORK/raw/"*.whl
           node scripts/rdkit-intel-wheel/audit.mjs
 
       - name: Install with the repository's smoke pins and run smoke tests
-        shell: sandbox-exec -f "${{ runner.temp }}/rdkit-intel/offline.sb" /bin/bash --noprofile --norc -e -o pipefail {0}
+        shell: bash --noprofile --norc scripts/rdkit-intel-wheel/offline-shell.sh {0}
         run: |
           python3.12 -m venv --copies "$WORK/smoke"
           "$WORK/smoke/bin/python3.12" -m pip install --no-index --require-hashes \

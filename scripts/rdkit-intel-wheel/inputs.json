@@ -14,9 +14,9 @@
     },
     {
       "name": "boost",
-      "version": "1.85.0",
-      "url": "https://github.com/boostorg/boost/releases/download/boost-1.85.0/boost-1.85.0-b2-nodocs.tar.xz",
-      "sha256": "09f0628bded81d20b0145b30925d7d7492fd99583671586525d5d66d4c28266a"
+      "version": "1.87.0",
+      "url": "https://github.com/boostorg/boost/releases/download/boost-1.87.0/boost-1.87.0-b2-nodocs.tar.xz",
+      "sha256": "3abd7a51118a5dd74673b25e0a3f0a4ab1752d8d618f4b8cea84a603aeecc680"
     },
     {
       "name": "eigen",
@@ -25,10 +25,16 @@
       "sha256": "b93c667d1b69265cdb4d9f30ec21f8facbbe8b307cf34c0b9942834c6d4fdbe2"
     },
     {
-      "name": "rapidjson",
-      "version": "1.1.0",
-      "url": "https://github.com/Tencent/rapidjson/archive/refs/tags/v1.1.0.tar.gz",
-      "sha256": "bf7ced29704a1e696fbccf2a2b4ea068e7774fa37f6d7dd4039d0787f8bed98e"
+      "name": "catch2",
+      "version": "3.4.0",
+      "url": "https://github.com/catchorg/Catch2/archive/refs/tags/v3.4.0.tar.gz",
+      "sha256": "122928b814b75717316c71af69bd2b43387643ba076a6ec16e7882bfb2dfacbb"
+    },
+    {
+      "name": "better_enums",
+      "version": "0.11.3",
+      "url": "https://github.com/aantron/better-enums/archive/c35576bed0295689540b39873126129adfa0b4c8.tar.gz",
+      "sha256": "9b78dcef7f88d1345b6f25335bfbcba5f024b08990c7d6dc605b833f4128b8dd"
     },
     {
       "name": "inchi",

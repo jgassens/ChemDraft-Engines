@@ -1,0 +1,5 @@
+# CPython 3.12 macOS x86_64 smoke dependencies; also checked against inputs.json.
+numpy==2.5.4 \
+    --hash=sha256:c6342f54c67093cae5c0227eb0eb772fdb79f2a2c37a6eb278b9909ee06aa356
+pillow==13.0.0 \
+    --hash=sha256:67c8d44ad89fa7eb88de5d6ef6199b1e03dd24974f85a67639fc8badb801fe79

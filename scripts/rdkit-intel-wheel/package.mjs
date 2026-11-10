@@ -37,7 +37,7 @@ const info = path.join(root, 'rdkit-2026.3.5.dist-info');
 const licenses = path.join(info, 'licenses');
 mkdirSync(licenses, { recursive: true });
 const licenseFiles = [];
-for (const component of ['rdkit', 'boost', 'eigen', 'rapidjson', 'inchi']) {
+for (const component of ['rdkit', 'boost', 'eigen', 'inchi', 'better_enums', 'catch2']) {
   const source = path.join(work, 'src', component);
   let count = 0;
   // Keep upstream texts verbatim, including embedded-code and font notices. Preserve the source
@@ -49,15 +49,23 @@ for (const component of ['rdkit', 'boost', 'eigen', 'rapidjson', 'inchi']) {
     const destination = path.join(licenses, relative);
     mkdirSync(path.dirname(destination), { recursive: true });
     cpSync(file, destination);
-    licenseFiles.push(`licenses/${relative.split(path.sep).join('/')}`);
+    // Core Metadata 2.4 resolves these paths relative to .dist-info/licenses/.
+    licenseFiles.push(relative.split(path.sep).join('/'));
     count += 1;
   }
   assert.ok(count > 0, `No upstream licence texts found for ${component}`);
 }
+const tbbDirectory = 'inchi/INCHI-1-SRC/INCHI_API/tbb';
+const tbbLabel = `${tbbDirectory}/README.txt`;
+const tbbNotice = 'Included for reference; tbb is not compiled into this wheel. InChI is built without USE_TBB_MALLOC.\n';
+mkdirSync(path.join(licenses, tbbDirectory), { recursive: true });
+writeFileSync(path.join(licenses, tbbLabel), tbbNotice);
+licenseFiles.push(tbbLabel);
 for (const required of ['rdkit/license.txt', 'boost/LICENSE_1_0.txt', 'eigen/COPYING.MPL2',
-  'rapidjson/license.txt', 'inchi/LICENSE']) {
+  'better_enums/LICENSE', 'catch2/LICENSE.txt', 'inchi/LICENSE', `${tbbDirectory}/LICENSE`, tbbLabel]) {
   assert.ok(existsSync(path.join(licenses, required)), `Required licence missing: ${required}`);
 }
+assert.equal(readFileSync(path.join(licenses, tbbLabel), 'utf8'), tbbNotice);
 writeFileSync(path.join(info, 'build-inputs.json'), readFileSync(path.join(work, 'inputs.json')));
 writeFileSync(path.join(info, 'WHEEL'), [
   'Wheel-Version: 1.0',

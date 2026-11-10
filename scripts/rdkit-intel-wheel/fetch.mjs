@@ -19,12 +19,12 @@ const missing = [...inputs.sources, ...inputs.wheels]
   .filter(({ sha256 }) => !/^[a-f0-9]{64}$/.test(sha256 ?? ''));
 assert.equal(missing.length, 0, `Missing reviewed SHA-256: ${missing.map(({ name }) => name).join(', ')}`);
 
-const lock = readFileSync('apps/desktop/src-tauri/resources/naming/requirements.txt', 'utf8');
+const lock = readFileSync(new URL('./smoke-requirements.txt', import.meta.url), 'utf8');
 for (const name of ['numpy', 'pillow']) {
   const pin = inputs.wheels.find((item) => item.name === name);
   const block = lock.split(/\n(?=[a-zA-Z])/).find((line) => line.startsWith(`${name}==`));
-  assert.ok(block?.startsWith(`${name}==${pin.version} \\`), `${name} version differs from naming lock`);
-  assert.ok(block.includes(`--hash=sha256:${pin.sha256}`), `${name} hash missing from naming lock`);
+  assert.ok(block?.startsWith(`${name}==${pin.version} \\`), `${name} version differs from smoke lock`);
+  assert.ok(block.includes(`--hash=sha256:${pin.sha256}`), `${name} hash missing from smoke lock`);
 }
 
 const downloads = path.join(work, 'downloads');

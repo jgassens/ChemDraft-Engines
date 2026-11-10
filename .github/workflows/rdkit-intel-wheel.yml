@@ -56,7 +56,7 @@ jobs:
           echo "$WORK/tools/bin" >> "$GITHUB_PATH"
           echo "$WORK/cmake/bin" >> "$GITHUB_PATH"
 
-      - name: Build Boost 1.85.0 and InChI 1.07.5
+      - name: Build Boost 1.87.0 and InChI 1.07.5
         shell: sandbox-exec -f "${{ runner.temp }}/rdkit-intel/offline.sb" /bin/bash --noprofile --norc -e -o pipefail {0}
         run: |
           export SDKROOT="$(xcrun --sdk macosx --show-sdk-path)"
@@ -64,31 +64,39 @@ jobs:
           ./bootstrap.sh --prefix="$WORK/prefix" --with-toolset=clang \
             --with-python="$WORK/tools/bin/python3.12" --with-python-version=3.12 \
             --with-libraries=python,serialization,iostreams,system
-          ./b2 -j3 install toolset=clang variant=release link=shared threading=multi \
-            architecture=x86 address-model=64 \
+          # Replace bootstrap's venv-derived include path with the base CPython headers.
+          cat > project-config.jam <<EOF
+          using clang ;
+          using python : 3.12 : "$WORK/tools/bin/python3.12" : "$WORK/python/include/python3.12" : "$WORK/python/lib" ;
+          EOF
+          ./b2 -j3 install --prefix="$WORK/prefix" \
+            --with-python --with-serialization --with-iostreams --with-system \
+            toolset=clang variant=release link=shared threading=multi \
+            python=3.12 architecture=x86 address-model=64 \
             cxxflags="-arch x86_64 -mmacosx-version-min=11.0" \
             linkflags="-arch x86_64 -mmacosx-version-min=11.0" \
             -sNO_BZIP2=1 -sNO_ZLIB=1 -sNO_LZMA=1 -sNO_ZSTD=1
-          cmake -S "$WORK/src/inchi/INCHI-1-SRC" -B "$WORK/build-inchi" \
-            -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON \
+          cmake -S "$WORK/src/inchi/INCHI-1-SRC/INCHI_API/libinchi/src" -B "$WORK/build-inchi" \
+            -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_FLAGS=-UUSE_TBB_MALLOC \
             -DCMAKE_OSX_ARCHITECTURES=x86_64 -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 \
-            -DCMAKE_INSTALL_PREFIX="$WORK/prefix" -DCMAKE_INSTALL_LIBDIR=lib \
             -DCMAKE_POLICY_VERSION_MINIMUM=3.5
-          cmake --build "$WORK/build-inchi" --parallel 3
-          cmake --install "$WORK/build-inchi"
+          cmake --build "$WORK/build-inchi" --target libinchi --parallel 3
+          # The library subproject has no install rules; stage its API and transitive header.
+          mkdir -p "$WORK/prefix/lib" "$WORK/prefix/include/inchi"
+          cp "$WORK/build-inchi/lib/libinchi.dylib" "$WORK/prefix/lib/"
+          for header in inchi_api.h bcf_s.h ixa.h; do
+            cp "$WORK/src/inchi/INCHI-1-SRC/INCHI_BASE/src/$header" "$WORK/prefix/include/inchi/"
+          done
 
       - name: Build RDKit from the official source tag
         shell: sandbox-exec -f "${{ runner.temp }}/rdkit-intel/offline.sb" /bin/bash --noprofile --norc -e -o pipefail {0}
         run: |
           export SDKROOT="$(xcrun --sdk macosx --show-sdk-path)"
-          # Follow the community rdkit-pypi CMake/Boost.Python approach, with optional drawing
-          # dependencies disabled. No unpinned FetchContent, git clones or CMake downloads.
+          # Required FetchContent sources are staged by fetch.mjs; optional download paths are off.
           cmake -S "$WORK/src/eigen" -B "$WORK/build-eigen" \
             -DCMAKE_INSTALL_PREFIX="$WORK/prefix" -DBUILD_TESTING=OFF \
             -DEIGEN_BUILD_DOC=OFF -DCMAKE_POLICY_VERSION_MINIMUM=3.5
           cmake --install "$WORK/build-eigen"
-          mkdir -p "$WORK/src/rdkit/External/rapidjson-1.1.0"
-          cp -R "$WORK/src/rapidjson/include" "$WORK/src/rdkit/External/rapidjson-1.1.0/"
           cmake -S "$WORK/src/rdkit" -B "$WORK/build-rdkit" \
             -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=x86_64 \
             -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
@@ -96,24 +104,33 @@ jobs:
             -DCMAKE_PREFIX_PATH="$WORK/prefix" -DCMAKE_IGNORE_PREFIX_PATH=/usr/local/opt \
             -DCMAKE_INSTALL_RPATH="$WORK/stage/lib;$WORK/prefix/lib" \
             -DCMAKE_CXX_FLAGS=-DEIGEN_MPL2_ONLY -DFETCHCONTENT_FULLY_DISCONNECTED=ON \
+            -DFETCHCONTENT_SOURCE_DIR_CATCH2="$WORK/src/catch2" \
+            -DFETCHCONTENT_SOURCE_DIR_BETTER_ENUMS="$WORK/src/better_enums" \
+            -DCMAKE_DISABLE_FIND_PACKAGE_Catch2=ON -DBUILD_TESTING=OFF \
+            -DCATCH_BUILD_TESTING=OFF -DCATCH_BUILD_EXAMPLES=OFF -DCATCH_BUILD_EXTRA_TESTS=OFF \
             -DPython3_EXECUTABLE="$WORK/tools/bin/python3.12" \
             -DBOOST_ROOT="$WORK/prefix" -DBoost_NO_SYSTEM_PATHS=ON \
             -DEIGEN3_INCLUDE_DIR="$WORK/prefix/include/eigen3" \
-            -DRAPIDJSON_INCLUDE_DIRS="$WORK/src/rapidjson/include" \
             -DINCHI_INCLUDE_DIR="$WORK/prefix/include/inchi" \
             -DINCHI_LIBRARY="$WORK/prefix/lib/libinchi.dylib" \
+            -DINCHI_LIBRARIES="$WORK/prefix/lib/libinchi.dylib" \
             -DRDK_INSTALL_INTREE=OFF -DRDK_INSTALL_STATIC_LIBS=OFF \
-            -DRDK_PYTHON_INSTALL_DIR="$WORK/stage/python" \
+            -DPYTHON_INSTDIR="$WORK/stage/python" \
             -DRDK_BUILD_PYTHON_WRAPPERS=ON -DRDK_BUILD_CPP_TESTS=OFF \
+            -DRDK_BUILD_SWIG_WRAPPERS=OFF -DRDK_BUILD_PGSQL=OFF -DRDK_BUILD_CONTRIB=OFF \
+            -DRDK_TEST_MMFF_COMPLIANCE=OFF -DRDK_BUILD_DESCRIPTORS3D=OFF \
             -DRDK_BUILD_INCHI_SUPPORT=ON -DRDK_BUILD_THREADSAFE_SSS=ON \
+            -DRDK_BUILD_PUBCHEMSHAPE_SUPPORT=OFF -DRDK_BUILD_CHEMDRAW_SUPPORT=OFF \
             -DRDK_USE_URF=OFF -DRDK_BUILD_COMPRESSED_SUPPLIERS=OFF \
             -DRDK_BUILD_AVALON_SUPPORT=OFF -DRDK_BUILD_COORDGEN_SUPPORT=OFF \
             -DRDK_BUILD_MAEPARSER_SUPPORT=OFF -DRDK_BUILD_CAIRO_SUPPORT=OFF \
             -DRDK_BUILD_FREETYPE_SUPPORT=OFF -DRDK_BUILD_QT_SUPPORT=OFF \
-            -DRDK_BUILD_YAEHMOP_SUPPORT=OFF
+            -DRDK_INSTALL_COMIC_FONTS=OFF -DRDK_BUILD_FREESASA_SUPPORT=OFF \
+            -DRDK_BUILD_YAEHMOP_SUPPORT=OFF -DRDK_BUILD_XYZ2MOL_SUPPORT=OFF
           cmake --build "$WORK/build-rdkit" --parallel 3
           cmake --install "$WORK/build-rdkit"
           node scripts/rdkit-intel-wheel/package.mjs
+          mkdir -p "$WORK/raw"
           python3.12 -m wheel pack "$WORK/wheel" --dest-dir "$WORK/raw"
 
       - name: Bundle dylibs and audit the final wheel
@@ -123,7 +140,7 @@ jobs:
             delocate-wheel --require-archs x86_64 --wheel-dir "$WORK/wheelhouse" "$WORK/raw/"*.whl
           node scripts/rdkit-intel-wheel/audit.mjs
 
-      - name: Install with the naming lock's NumPy and run smoke tests
+      - name: Install with the repository's smoke pins and run smoke tests
         shell: sandbox-exec -f "${{ runner.temp }}/rdkit-intel/offline.sb" /bin/bash --noprofile --norc -e -o pipefail {0}
         run: |
           python3.12 -m venv --copies "$WORK/smoke"

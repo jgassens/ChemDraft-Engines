@@ -1,0 +1,170 @@
+name: Intel Mac RDKit wheel
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  wheel:
+    # Explicit Intel host; macos-13 is retired. Never use macos-latest (Apple silicon).
+    runs-on: macos-15-intel
+    timeout-minutes: 180
+    defaults:
+      run:
+        shell: bash
+    env:
+      MACOSX_DEPLOYMENT_TARGET: '11.0'
+      PIP_DISABLE_PIP_VERSION_CHECK: '1'
+      PYTHONHASHSEED: '0'
+      SOURCE_DATE_EPOCH: '1788220800'
+      RDKIT_SOURCE_TAG: Release_2026_03_5
+      # SHA-256 of the official GitHub tarball for this tag, checked against a fresh download.
+      # fetch.mjs checks it before using the source.
+      RDKIT_SOURCE_SHA256: 336b3ffd9b691e4bfcdf97d361c01e553de34d2ca85c64a941473e9e2f8b707e
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Verify host and fetch checksummed inputs
+        run: |
+          test "$(uname -m)" = x86_64
+          echo "WORK=$RUNNER_TEMP/rdkit-intel" >> "$GITHUB_ENV"
+          node scripts/rdkit-intel-wheel/fetch.mjs "$RUNNER_TEMP/rdkit-intel"
+          xcodebuild -version
+          xcrun clang --version
+
+      - name: Build pinned CPython 3.12.15 and CMake 4.4.4
+        shell: sandbox-exec -f "${{ runner.temp }}/rdkit-intel/offline.sb" /bin/bash --noprofile --norc -e -o pipefail {0}
+        run: |
+          # SDK/compiler, curl, make and Node come from the hosted runner; no Homebrew installs.
+          export SDKROOT="$(xcrun --sdk macosx --show-sdk-path)"
+          cd "$WORK/src/python"
+          ./configure --prefix="$WORK/python" --with-ensurepip=install
+          make -j3
+          make install
+          "$WORK/python/bin/python3.12" -m venv "$WORK/tools"
+          "$WORK/tools/bin/python3.12" -m pip install --no-index --require-hashes \
+            --only-binary=:all: --find-links="$WORK/downloads" -r "$WORK/tools.txt"
+          "$WORK/tools/bin/python3.12" -m pip check
+          cd "$WORK/src/cmake"
+          ./bootstrap --prefix="$WORK/cmake" --parallel=3 -- -DCMAKE_USE_OPENSSL=OFF
+          make -j3
+          make install
+          echo "$WORK/tools/bin" >> "$GITHUB_PATH"
+          echo "$WORK/cmake/bin" >> "$GITHUB_PATH"
+
+      - name: Build Boost 1.85.0 and InChI 1.07.5
+        shell: sandbox-exec -f "${{ runner.temp }}/rdkit-intel/offline.sb" /bin/bash --noprofile --norc -e -o pipefail {0}
+        run: |
+          export SDKROOT="$(xcrun --sdk macosx --show-sdk-path)"
+          cd "$WORK/src/boost"
+          ./bootstrap.sh --prefix="$WORK/prefix" --with-toolset=clang \
+            --with-python="$WORK/tools/bin/python3.12" --with-python-version=3.12 \
+            --with-libraries=python,serialization,iostreams,system
+          ./b2 -j3 install toolset=clang variant=release link=shared threading=multi \
+            architecture=x86 address-model=64 \
+            cxxflags="-arch x86_64 -mmacosx-version-min=11.0" \
+            linkflags="-arch x86_64 -mmacosx-version-min=11.0" \
+            -sNO_BZIP2=1 -sNO_ZLIB=1 -sNO_LZMA=1 -sNO_ZSTD=1
+          cmake -S "$WORK/src/inchi/INCHI-1-SRC" -B "$WORK/build-inchi" \
+            -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON \
+            -DCMAKE_OSX_ARCHITECTURES=x86_64 -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 \
+            -DCMAKE_INSTALL_PREFIX="$WORK/prefix" -DCMAKE_INSTALL_LIBDIR=lib \
+            -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+          cmake --build "$WORK/build-inchi" --parallel 3
+          cmake --install "$WORK/build-inchi"
+
+      - name: Build RDKit from the official source tag
+        shell: sandbox-exec -f "${{ runner.temp }}/rdkit-intel/offline.sb" /bin/bash --noprofile --norc -e -o pipefail {0}
+        run: |
+          export SDKROOT="$(xcrun --sdk macosx --show-sdk-path)"
+          # Follow the community rdkit-pypi CMake/Boost.Python approach, with optional drawing
+          # dependencies disabled. No unpinned FetchContent, git clones or CMake downloads.
+          cmake -S "$WORK/src/eigen" -B "$WORK/build-eigen" \
+            -DCMAKE_INSTALL_PREFIX="$WORK/prefix" -DBUILD_TESTING=OFF \
+            -DEIGEN_BUILD_DOC=OFF -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+          cmake --install "$WORK/build-eigen"
+          mkdir -p "$WORK/src/rdkit/External/rapidjson-1.1.0"
+          cp -R "$WORK/src/rapidjson/include" "$WORK/src/rdkit/External/rapidjson-1.1.0/"
+          cmake -S "$WORK/src/rdkit" -B "$WORK/build-rdkit" \
+            -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=x86_64 \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+            -DCMAKE_INSTALL_PREFIX="$WORK/stage" -DCMAKE_INSTALL_LIBDIR=lib \
+            -DCMAKE_PREFIX_PATH="$WORK/prefix" -DCMAKE_IGNORE_PREFIX_PATH=/usr/local/opt \
+            -DCMAKE_INSTALL_RPATH="$WORK/stage/lib;$WORK/prefix/lib" \
+            -DCMAKE_CXX_FLAGS=-DEIGEN_MPL2_ONLY -DFETCHCONTENT_FULLY_DISCONNECTED=ON \
+            -DPython3_EXECUTABLE="$WORK/tools/bin/python3.12" \
+            -DBOOST_ROOT="$WORK/prefix" -DBoost_NO_SYSTEM_PATHS=ON \
+            -DEIGEN3_INCLUDE_DIR="$WORK/prefix/include/eigen3" \
+            -DRAPIDJSON_INCLUDE_DIRS="$WORK/src/rapidjson/include" \
+            -DINCHI_INCLUDE_DIR="$WORK/prefix/include/inchi" \
+            -DINCHI_LIBRARY="$WORK/prefix/lib/libinchi.dylib" \
+            -DRDK_INSTALL_INTREE=OFF -DRDK_INSTALL_STATIC_LIBS=OFF \
+            -DRDK_PYTHON_INSTALL_DIR="$WORK/stage/python" \
+            -DRDK_BUILD_PYTHON_WRAPPERS=ON -DRDK_BUILD_CPP_TESTS=OFF \
+            -DRDK_BUILD_INCHI_SUPPORT=ON -DRDK_BUILD_THREADSAFE_SSS=ON \
+            -DRDK_USE_URF=OFF -DRDK_BUILD_COMPRESSED_SUPPLIERS=OFF \
+            -DRDK_BUILD_AVALON_SUPPORT=OFF -DRDK_BUILD_COORDGEN_SUPPORT=OFF \
+            -DRDK_BUILD_MAEPARSER_SUPPORT=OFF -DRDK_BUILD_CAIRO_SUPPORT=OFF \
+            -DRDK_BUILD_FREETYPE_SUPPORT=OFF -DRDK_BUILD_QT_SUPPORT=OFF \
+            -DRDK_BUILD_YAEHMOP_SUPPORT=OFF
+          cmake --build "$WORK/build-rdkit" --parallel 3
+          cmake --install "$WORK/build-rdkit"
+          node scripts/rdkit-intel-wheel/package.mjs
+          python3.12 -m wheel pack "$WORK/wheel" --dest-dir "$WORK/raw"
+
+      - name: Bundle dylibs and audit the final wheel
+        shell: sandbox-exec -f "${{ runner.temp }}/rdkit-intel/offline.sb" /bin/bash --noprofile --norc -e -o pipefail {0}
+        run: |
+          DYLD_LIBRARY_PATH="$WORK/stage/lib:$WORK/prefix/lib" \
+            delocate-wheel --require-archs x86_64 --wheel-dir "$WORK/wheelhouse" "$WORK/raw/"*.whl
+          node scripts/rdkit-intel-wheel/audit.mjs
+
+      - name: Install with the naming lock's NumPy and run smoke tests
+        shell: sandbox-exec -f "${{ runner.temp }}/rdkit-intel/offline.sb" /bin/bash --noprofile --norc -e -o pipefail {0}
+        run: |
+          python3.12 -m venv --copies "$WORK/smoke"
+          "$WORK/smoke/bin/python3.12" -m pip install --no-index --require-hashes \
+            --only-binary=:all: --find-links="$WORK/downloads" --find-links="$WORK/wheelhouse" \
+            -r "$WORK/smoke.txt"
+          # Exercise relocation and prevent accidental loading from the build/install prefixes.
+          mv "$WORK/smoke" "$WORK/smoke-moved"
+          mv "$WORK/stage" "$WORK/stage-hidden"
+          mv "$WORK/prefix" "$WORK/prefix-hidden"
+          cd "$RUNNER_TEMP"
+          env -u RDBASE -u PYTHONPATH -u DYLD_LIBRARY_PATH "$WORK/smoke-moved/bin/python3.12" -I - <<'PY'
+          import rdkit
+          import numpy
+          from pathlib import Path
+          from rdkit import Chem, RDConfig
+          from rdkit.Chem import inchi
+          assert rdkit.__version__ == '2026.03.5', rdkit.__version__
+          assert numpy.__version__ == '2.5.4', numpy.__version__
+          assert Path(RDConfig.RDDataDir, 'BaseFeatures.fdef').is_file()
+          for smiles, canonical in [
+              ('OCC', 'CCO'),
+              ('C(C(=O)O)N', 'NCC(=O)O'),
+              ('F[C@](Cl)(Br)I', 'F[C@](Cl)(Br)I'),
+          ]:
+              mol = Chem.MolFromSmiles(smiles)
+              assert mol is not None, smiles
+              actual = Chem.MolToSmiles(mol, canonical=True, isomericSmiles=True)
+              assert actual == canonical, (smiles, actual, canonical)
+              assert Chem.MolToSmiles(Chem.MolFromSmiles(actual)) == actual
+              assert inchi.INCHI_AVAILABLE
+              assert inchi.MolToInchi(mol).startswith('InChI=1S/')
+              print(smiles, actual)
+          print('RDKit Intel wheel smoke test passed', rdkit.__version__)
+          PY
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: rdkit-2026.3.5-cp312-macosx_11_0_x86_64
+          path: |
+            ${{ runner.temp }}/rdkit-intel/wheelhouse/*.whl
+            ${{ runner.temp }}/rdkit-intel/wheelhouse/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 14

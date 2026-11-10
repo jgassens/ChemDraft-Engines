@@ -1,0 +1,96 @@
+{
+  "sources": [
+    {
+      "name": "python",
+      "version": "3.12.15",
+      "url": "https://www.python.org/ftp/python/3.12.15/Python-3.12.15.tgz",
+      "sha256": "de1a241a519e0a3374fea98988d0b52c886743f9d953f23be8269cc7b59c5fab"
+    },
+    {
+      "name": "cmake",
+      "version": "4.4.4",
+      "url": "https://github.com/Kitware/CMake/releases/download/v4.4.4/cmake-4.4.4.tar.gz",
+      "sha256": "bd24c30d80a7744ae84b845ff080cc8453b06c622ef01066564108e9cefc44cf"
+    },
+    {
+      "name": "boost",
+      "version": "1.85.0",
+      "url": "https://github.com/boostorg/boost/releases/download/boost-1.85.0/boost-1.85.0-b2-nodocs.tar.xz",
+      "sha256": "09f0628bded81d20b0145b30925d7d7492fd99583671586525d5d66d4c28266a"
+    },
+    {
+      "name": "eigen",
+      "version": "3.4.1",
+      "url": "https://gitlab.com/libeigen/eigen/-/archive/3.4.1/eigen-3.4.1.tar.gz",
+      "sha256": "b93c667d1b69265cdb4d9f30ec21f8facbbe8b307cf34c0b9942834c6d4fdbe2"
+    },
+    {
+      "name": "rapidjson",
+      "version": "1.1.0",
+      "url": "https://github.com/Tencent/rapidjson/archive/refs/tags/v1.1.0.tar.gz",
+      "sha256": "bf7ced29704a1e696fbccf2a2b4ea068e7774fa37f6d7dd4039d0787f8bed98e"
+    },
+    {
+      "name": "inchi",
+      "version": "1.07.5",
+      "url": "https://github.com/IUPAC-InChI/InChI/archive/refs/tags/v1.07.5.tar.gz",
+      "sha256": "9a8af985295c47bfaf424ad8386b1597da515589665ec71908dae1bd2b67ac96"
+    }
+  ],
+  "wheels": [
+    {
+      "name": "setuptools",
+      "version": "80.9.0",
+      "filename": "setuptools-80.9.0-py3-none-any.whl",
+      "sha256": "062d34222ad13e0cc312a4c02d73f059e86a4acbfbdea8f8f76b28c99f306922"
+    },
+    {
+      "name": "wheel",
+      "version": "0.45.1",
+      "filename": "wheel-0.45.1-py3-none-any.whl",
+      "sha256": "708e7481cc80179af0e556bbf0cc00b8444c7321e2700b8d8580231d13017248"
+    },
+    {
+      "name": "packaging",
+      "version": "25.0",
+      "filename": "packaging-25.0-py3-none-any.whl",
+      "sha256": "29572ef2b1f17581046b3a2227d5c611fb25ec70ca1ba8554b24b0e69331a484"
+    },
+    {
+      "name": "altgraph",
+      "version": "0.17.4",
+      "filename": "altgraph-0.17.4-py2.py3-none-any.whl",
+      "sha256": "642743b4750de17e655e6711601b077bc6598dbfa3ba5fa2b2a35ce12b508dff"
+    },
+    {
+      "name": "macholib",
+      "version": "1.16.3",
+      "filename": "macholib-1.16.3-py2.py3-none-any.whl",
+      "sha256": "0e315d7583d38b8c77e815b1ecbdbf504a8258d8b3e17b61165c6feb60d18f2c"
+    },
+    {
+      "name": "typing_extensions",
+      "version": "4.12.2",
+      "filename": "typing_extensions-4.12.2-py3-none-any.whl",
+      "sha256": "04e5ca0351e0f3f85c6853954072df659d0d13fac324d0072316b67d7794700d"
+    },
+    {
+      "name": "delocate",
+      "version": "0.12.0",
+      "filename": "delocate-0.12.0-py3-none-any.whl",
+      "sha256": "0da599c7561dcca2835149eaa4733e85408d71f249c6c4c43c3cb16cedb43a09"
+    },
+    {
+      "name": "numpy",
+      "version": "2.5.4",
+      "filename": "numpy-2.5.4-cp312-cp312-macosx_10_13_x86_64.whl",
+      "sha256": "c6342f54c67093cae5c0227eb0eb772fdb79f2a2c37a6eb278b9909ee06aa356"
+    },
+    {
+      "name": "pillow",
+      "version": "13.0.0",
+      "filename": "pillow-13.0.0-cp312-cp312-macosx_10_13_x86_64.whl",
+      "sha256": "67c8d44ad89fa7eb88de5d6ef6199b1e03dd24974f85a67639fc8badb801fe79"
+    }
+  ]
+}

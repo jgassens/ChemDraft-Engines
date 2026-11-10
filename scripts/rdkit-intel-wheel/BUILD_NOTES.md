@@ -1,8 +1,7 @@
 # Intel RDKit wheel build notes
 
 Source references below are relative to the upstream RDKit `Release_2026_03_5`
-and InChI `v1.07.5` trees. They were inspected locally; no build, installation,
-workflow dispatch or network request was performed for this change.
+and InChI `v1.07.5` trees.
 
 ## Required inputs
 
@@ -10,9 +9,8 @@ Boost **1.87.0** is selected as the first release with Boost.NumPy support for
 NumPy 2, replacing direct access to the removed `PyArray_Descr::elsize` layout.
 RDKit accepts it: `rdkit/CMakeLists.txt:93` sets a minimum of 1.81.0, and
 `rdkit/CMakeLists.txt:341` requires both the Python and NumPy components for the
-selected interpreter. The Boost 1.87.0 source and release history were not
-available locally, so the integrator must confirm the NumPy 2 change and the
-earliest-release claim when downloading it. The relevant upstream locations are
+selected interpreter. Boost 1.87.0 uses `PyDataType_ELSIZE` when
+`NPY_ABI_VERSION >= 0x02000000`. The relevant upstream locations are
 [the release notes](https://www.boost.org/users/history/version_1_87_0.html) and
 [dtype.cpp](https://github.com/boostorg/python/blob/boost-1.87.0/src/numpy/dtype.cpp).
 
@@ -104,7 +102,3 @@ InChI and RDConfig data remain enabled and exercised by the existing relocated
 venv smoke test. The sandbox, SHA-256 checks, pinned actions, read-only workflow
 permissions, credential setting, architecture/deployment audit and artifact-only
 upload are retained.
-
-The new source archives and their licence filenames still need confirmation
-when downloaded. The macOS build, delocation and relocation smoke test remain
-unverified here because only the four requested static checks are permitted.

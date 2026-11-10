@@ -37,7 +37,7 @@ const info = path.join(root, 'rdkit-2026.3.5.dist-info');
 const licenses = path.join(info, 'licenses');
 mkdirSync(licenses, { recursive: true });
 const licenseFiles = [];
-for (const component of ['rdkit', 'boost', 'eigen', 'inchi', 'better_enums', 'catch2']) {
+for (const component of ['rdkit', 'boost', 'eigen', 'inchi', 'better_enums']) {
   const source = path.join(work, 'src', component);
   let count = 0;
   // Keep upstream texts verbatim, including embedded-code and font notices. Preserve the source
@@ -62,7 +62,7 @@ mkdirSync(path.join(licenses, tbbDirectory), { recursive: true });
 writeFileSync(path.join(licenses, tbbLabel), tbbNotice);
 licenseFiles.push(tbbLabel);
 for (const required of ['rdkit/license.txt', 'boost/LICENSE_1_0.txt', 'eigen/COPYING.MPL2',
-  'better_enums/LICENSE', 'catch2/LICENSE.txt', 'inchi/LICENSE', `${tbbDirectory}/LICENSE`, tbbLabel]) {
+  'better_enums/LICENSE.md', 'inchi/LICENSE', `${tbbDirectory}/LICENSE`, tbbLabel]) {
   assert.ok(existsSync(path.join(licenses, required)), `Required licence missing: ${required}`);
 }
 assert.equal(readFileSync(path.join(licenses, tbbLabel), 'utf8'), tbbNotice);

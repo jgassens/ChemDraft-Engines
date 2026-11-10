@@ -12,13 +12,14 @@ using clang ;
 using python : 3.12 : "$WORK/tools/bin/python3.12" : "$WORK/python/include/python3.12" : "$WORK/python/lib" ;
 EOF
 # RDStreams uses gzip even with compressed suppliers disabled. Use only SDK libz.
+# The sysroot supplies its headers; an explicit include path could bypass it.
 ./b2 -j3 install --prefix="$WORK/prefix" \
   --with-python --with-serialization --with-iostreams --with-system \
   toolset=clang variant=release link=shared threading=multi \
   python=3.12 architecture=x86 address-model=64 \
   cxxflags="-isysroot $SDKROOT -arch x86_64 -mmacosx-version-min=11.0" \
   linkflags="-isysroot $SDKROOT -arch x86_64 -mmacosx-version-min=11.0" \
-  -sZLIB_INCLUDE="$SDKROOT/usr/include" -sZLIB_LIBPATH="$SDKROOT/usr/lib" \
+  -sZLIB_LIBPATH="$SDKROOT/usr/lib" \
   -sNO_BZIP2=1 -sNO_LZMA=1 -sNO_ZSTD=1
 cmake -S "$WORK/src/inchi/INCHI-1-SRC/INCHI_API/libinchi/src" -B "$WORK/build-inchi" \
   -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_FLAGS=-UUSE_TBB_MALLOC \

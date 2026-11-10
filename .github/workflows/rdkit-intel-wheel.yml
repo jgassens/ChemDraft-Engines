@@ -39,8 +39,10 @@ jobs:
       - name: Identify runner image for build caches
         id: cache-image
         run: |
-          echo "os=${ImageOS:-unknown}" >> "$GITHUB_OUTPUT"
-          echo "version=${ImageVersion:-unknown}" >> "$GITHUB_OUTPUT"
+          : "${ImageOS:?ImageOS is required}"
+          : "${ImageVersion:?ImageVersion is required}"
+          echo "os=$ImageOS" >> "$GITHUB_OUTPUT"
+          echo "version=$ImageVersion" >> "$GITHUB_OUTPUT"
 
       - name: Hash inputs for each cached build stage
         id: cache-inputs
@@ -125,6 +127,14 @@ jobs:
           path: ${{ env.WORK }}/prefix
           key: rdkit-intel-dependencies-${{ runner.os }}-${{ runner.arch }}-${{ steps.cache-image.outputs.os }}-${{ steps.cache-image.outputs.version }}-target-${{ env.MACOSX_DEPLOYMENT_TARGET }}-${{ hashFiles('scripts/rdkit-intel-wheel/build-deps.sh', 'scripts/rdkit-intel-wheel/check-build.sh') }}-${{ steps.cache-inputs.outputs.dependencies }}-${{ steps.tools-lookup.outputs.cache-primary-key }}-v1
           lookup-only: true
+
+      - name: Record build cache hits
+        env:
+          TOOLS_HIT: ${{ steps.tools-lookup.outputs.cache-hit }}
+          DEPS_HIT: ${{ steps.dependencies-lookup.outputs.cache-hit }}
+        run: |
+          echo "Tools cache hit: $([[ "$TOOLS_HIT" == true ]] && echo true || echo false)" >> "$GITHUB_STEP_SUMMARY"
+          echo "Dependencies cache hit: $([[ "$DEPS_HIT" == true ]] && echo true || echo false)" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Restore exact dependency build cache
         id: dependencies-cache

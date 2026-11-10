@@ -29,9 +29,10 @@ saved immediately. Eigen staging is part of `build-deps.sh` and the cached
 prefix; the dependency cache is saved before the smoke test moves it.
 
 A release wheel should come from a run with both caches cleared, or with a fresh
-manual key suffix, so it is built end to end. The workflow remains manual
-dispatch only, with `contents: read` and checkout credentials disabled; only
-maintainers can populate its caches.
+manual key suffix, so it is built end to end. Each run records the tools and
+dependency cache-hit status in the job summary. The workflow remains manual
+dispatch only, with `contents: read` and checkout credentials disabled; caches
+are scoped to the default branch.
 
 ## Required inputs
 
@@ -72,10 +73,7 @@ The SHA-256 of each of these exact URLs was checked against a fresh download
 ## First-run linker failure and warnings
 
 The complete first failed-run log ends at the RDStreams link failure; it does
-not reach packaging, delocation, the wheel audit or the smoke test. These fixes
-were reviewed against that log and the local upstream sources without network
-access. The workflow cannot be run in this environment; only the three requested
-syntax/whitespace checks are run locally.
+not reach packaging, delocation, the wheel audit or the smoke test.
 
 `rdkit/Code/RDStreams/CMakeLists.txt:2` always creates RDStreams from
 `streams.cpp`. `rdkit/Code/RDStreams/streams.h:7` includes Boost's gzip filter,
@@ -84,8 +82,8 @@ Boost.Iostreams is enabled. Disabling compressed suppliers does not remove this
 requirement. The old b2 `NO_ZLIB=1` omitted Boost's zlib/gzip implementations,
 causing the undefined `boost::iostreams::zlib_error::check(int)`, `gzip_error`
 and related symbols in the log. Removing that setting and passing
-`ZLIB_INCLUDE=$SDKROOT/usr/include` and `ZLIB_LIBPATH=$SDKROOT/usr/lib` enables
-those implementations using the SDK's system libz. Both b2 compilation and
+`ZLIB_LIBPATH=$SDKROOT/usr/lib` enables those implementations using the SDK's
+system libz; the sysroot supplies the headers. Both b2 compilation and
 linking explicitly use that sysroot, x86_64 and deployment target 11.0.
 No zlib source is downloaded or bundled; the resulting dependency is the macOS
 system `/usr/lib/libz.1.dylib`, available on macOS 11 and later.

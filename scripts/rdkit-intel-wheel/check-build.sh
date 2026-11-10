@@ -15,6 +15,7 @@ case "${1:-}" in
   tools)
     test "$("$WORK/python/bin/python3.12" --version)" = 'Python 3.12.15'
     test "$("$WORK/tools/bin/python3.12" --version)" = 'Python 3.12.15'
+    test "$("$WORK/cmake/bin/cmake" --version | head -n 1)" = 'cmake version 4.4.4'
     for binary in "$WORK/python/bin/python3.12" "$WORK/tools/bin/python3.12" \
       "$WORK/cmake/bin/cmake" "$WORK/cmake/bin/ctest" "$WORK/cmake/bin/cpack"; do
       check_arch "$binary"
@@ -24,6 +25,17 @@ case "${1:-}" in
   dependencies)
     check_arch "$WORK/prefix/lib/libinchi.dylib"
     compgen -G "$WORK/prefix/lib/libboost_*.dylib" > /dev/null
+    boost_iostreams=("$WORK"/prefix/lib/libboost_iostreams*.dylib)
+    test -f "${boost_iostreams[0]}"
+    for library in "${boost_iostreams[@]}"; do
+      symbols="$(nm -gU "$library")"
+      [[ "$symbols" == *zlib_error* && "$symbols" == *gzip* ]]
+      linkage="$(otool -L "$library")"
+      [[ "$linkage" == *'/usr/lib/libz.1.dylib'* ]]
+    done
+    grep -Eq 'set\([[:space:]]*PACKAGE_VERSION[[:space:]]+"?1\.87\.0"?[[:space:]]*\)' \
+      "$WORK/prefix/lib/cmake/Boost-1.87.0/BoostConfigVersion.cmake"
+    test -f "$WORK/prefix/include/eigen3/Eigen/Core"
     roots=("$WORK/prefix")
     ;;
   *)

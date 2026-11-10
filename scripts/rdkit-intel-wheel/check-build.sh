@@ -45,7 +45,8 @@ case "${1:-}" in
 esac
 
 # Check native modules as well as dylibs and Mach-O executables; skip script entry points.
-find "${roots[@]}" -type f \( -name '*.dylib' -o -name '*.so' -o -perm -111 \) -print0 |
+find "${roots[@]}" \( -type d -path '*/site-packages/*' \( -name tests -o -name test \) -prune \) -o \
+  \( -type f \( -name '*.dylib' -o -name '*.so' -o -perm -111 \) -print0 \) |
   while IFS= read -r -d '' binary; do
     case "$binary" in
       *.dylib|*.so) check_arch "$binary" ;;

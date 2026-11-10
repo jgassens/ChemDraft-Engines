@@ -25,7 +25,9 @@ steps remain in the offline sandbox; cache lookup, restore and save steps run
 outside it and transfer only the install folders. Restored Python must report
 `Python 3.12.15`, and the native executables, dylibs and extension modules are
 checked with `lipo -archs` for exactly `x86_64`. Finished builds are checked and
-saved immediately. Eigen staging is part of `build-deps.sh` and the cached
+saved immediately. Package `test` and `tests` directories under `site-packages`
+are skipped because bundled test data can contain binaries for other architectures
+that are not used in the build or included in the wheel. Eigen staging is part of `build-deps.sh` and the cached
 prefix; the dependency cache is saved before the smoke test moves it.
 
 A release wheel should come from a run with both caches cleared, or with a fresh

@@ -69,13 +69,15 @@ jobs:
           using clang ;
           using python : 3.12 : "$WORK/tools/bin/python3.12" : "$WORK/python/include/python3.12" : "$WORK/python/lib" ;
           EOF
+          # RDStreams uses gzip even with compressed suppliers disabled. Use only SDK libz.
           ./b2 -j3 install --prefix="$WORK/prefix" \
             --with-python --with-serialization --with-iostreams --with-system \
             toolset=clang variant=release link=shared threading=multi \
             python=3.12 architecture=x86 address-model=64 \
-            cxxflags="-arch x86_64 -mmacosx-version-min=11.0" \
-            linkflags="-arch x86_64 -mmacosx-version-min=11.0" \
-            -sNO_BZIP2=1 -sNO_ZLIB=1 -sNO_LZMA=1 -sNO_ZSTD=1
+            cxxflags="-isysroot $SDKROOT -arch x86_64 -mmacosx-version-min=11.0" \
+            linkflags="-isysroot $SDKROOT -arch x86_64 -mmacosx-version-min=11.0" \
+            -sZLIB_INCLUDE="$SDKROOT/usr/include" -sZLIB_LIBPATH="$SDKROOT/usr/lib" \
+            -sNO_BZIP2=1 -sNO_LZMA=1 -sNO_ZSTD=1
           cmake -S "$WORK/src/inchi/INCHI-1-SRC/INCHI_API/libinchi/src" -B "$WORK/build-inchi" \
             -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_FLAGS=-UUSE_TBB_MALLOC \
             -DCMAKE_OSX_ARCHITECTURES=x86_64 -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 \
@@ -107,9 +109,11 @@ jobs:
             -DFETCHCONTENT_SOURCE_DIR_CATCH2="$WORK/src/catch2" \
             -DFETCHCONTENT_SOURCE_DIR_BETTER_ENUMS="$WORK/src/better_enums" \
             -DCMAKE_DISABLE_FIND_PACKAGE_Catch2=ON -DBUILD_TESTING=OFF \
+            -DCMAKE_PROJECT_Catch2_INCLUDE="$GITHUB_WORKSPACE/scripts/rdkit-intel-wheel/catch2-exclude.cmake" \
             -DCATCH_BUILD_TESTING=OFF -DCATCH_BUILD_EXAMPLES=OFF -DCATCH_BUILD_EXTRA_TESTS=OFF \
+            -DCMAKE_DISABLE_FIND_PACKAGE_TBB=ON \
             -DPython3_EXECUTABLE="$WORK/tools/bin/python3.12" \
-            -DBOOST_ROOT="$WORK/prefix" -DBoost_NO_SYSTEM_PATHS=ON \
+            -DBoost_DIR="$WORK/prefix/lib/cmake/Boost-1.87.0" \
             -DEIGEN3_INCLUDE_DIR="$WORK/prefix/include/eigen3" \
             -DINCHI_INCLUDE_DIR="$WORK/prefix/include/inchi" \
             -DINCHI_LIBRARY="$WORK/prefix/lib/libinchi.dylib" \

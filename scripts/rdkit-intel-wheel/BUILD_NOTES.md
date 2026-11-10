@@ -27,7 +27,8 @@ better-enums and copies its `enum.h`. Both tarballs are staged before the offlin
 build and supplied through `FETCHCONTENT_SOURCE_DIR_CATCH2` and
 `FETCHCONTENT_SOURCE_DIR_BETTER_ENUMS`. Catch2 package discovery is disabled so
 the host cannot override the staged version. Catch2's own tests and examples are
-disabled along with RDKit's C++ tests.
+disabled along with RDKit's C++ tests. See the first-run corrections below for
+excluding the Catch2 libraries themselves from the default build.
 
 The SHA-256 of each of these exact URLs was checked against a fresh download
 (2026-11-10) and is pinned in `inputs.json`:
@@ -37,6 +38,68 @@ The SHA-256 of each of these exact URLs was checked against a fresh download
 | Boost 1.87.0 | https://github.com/boostorg/boost/releases/download/boost-1.87.0/boost-1.87.0-b2-nodocs.tar.xz |
 | Catch2 v3.4.0 | https://github.com/catchorg/Catch2/archive/refs/tags/v3.4.0.tar.gz |
 | better-enums 0.11.3 commit | https://github.com/aantron/better-enums/archive/c35576bed0295689540b39873126129adfa0b4c8.tar.gz |
+
+## First-run linker failure and warnings
+
+The complete first failed-run log ends at the RDStreams link failure; it does
+not reach packaging, delocation, the wheel audit or the smoke test. These fixes
+were reviewed against that log and the local upstream sources without network
+access. The workflow cannot be run in this environment; only the three requested
+syntax/whitespace checks are run locally.
+
+`rdkit/Code/RDStreams/CMakeLists.txt:2` always creates RDStreams from
+`streams.cpp`. `rdkit/Code/RDStreams/streams.h:7` includes Boost's gzip filter,
+and `rdkit/Code/RDStreams/streams.cpp:8` constructs `gzip_decompressor` when
+Boost.Iostreams is enabled. Disabling compressed suppliers does not remove this
+requirement. The old b2 `NO_ZLIB=1` omitted Boost's zlib/gzip implementations,
+causing the undefined `boost::iostreams::zlib_error::check(int)`, `gzip_error`
+and related symbols in the log. Removing that setting and passing
+`ZLIB_INCLUDE=$SDKROOT/usr/include` and `ZLIB_LIBPATH=$SDKROOT/usr/lib` enables
+those implementations using the SDK's system libz. Both b2 compilation and
+linking explicitly use that sysroot, x86_64 and deployment target 11.0.
+No zlib source is downloaded or bundled; the resulting dependency is the macOS
+system `/usr/lib/libz.1.dylib`, available on macOS 11 and later.
+RDStreams uses no bzip2, lzma or zstd filters, so all three stay disabled.
+Shared Boost linkage is inherited through `rdkit_base` at
+`rdkit/Code/cmake/Modules/RDKitUtils.cmake:90` and
+`rdkit/CMakeLists.txt:460`; the extra direct zlib linkage at `:476` is only for
+static Boost builds and is not needed here.
+
+The TBB warning is harmless: the optional `find_package(TBB)` at
+`rdkit/Code/GraphMol/FileParsers/CMakeLists.txt:133` only changes linkage of an
+iterator C++ test, with a fallback at `:138`. C++ test creation is guarded by
+`RDK_BUILD_CPP_TESTS` at `rdkit/Code/cmake/Modules/RDKitUtils.cmake:239`.
+There is no RDKit-specific TBB switch in this tag; the supported CMake option
+`CMAKE_DISABLE_FIND_PACKAGE_TBB=ON` stops that optional lookup. This does not
+disable thread-safe substructure searching or alter InChI's allocator settings.
+
+`rdkit/CMakeLists.txt:180` and `:190` find/add Catch2 unconditionally, outside
+the C++ test guard. `CATCH_BUILD_TESTING=OFF` only disables Catch2's own tests;
+it does not disable its libraries. This tag has no RDKit option to skip that
+FetchContent call. The supported CMake
+[`CMAKE_PROJECT_Catch2_INCLUDE`](https://cmake.org/cmake/help/latest/variable/CMAKE_PROJECT_PROJECT-NAME_INCLUDE.html)
+hook loads `catch2-exclude.cmake` in Catch2's directory during `project()`.
+It sets CMake's `EXCLUDE_FROM_ALL` directory property, excluding the unused
+Catch2 libraries and their install rules from the parent build. Their targets
+remain available, but with RDKit's C++ tests off there are no consumers to build
+them. The checksummed source override and offline FetchContent settings remain.
+
+The logged CMP0144 warning says the uppercase `BOOST_ROOT` is ignored, and
+`Boost_NO_SYSTEM_PATHS` is unused because RDKit requests Boost in CONFIG mode
+(`rdkit/CMakeLists.txt:341`, `:452`, `:462`). `Boost_DIR` now selects the exact
+installed `prefix/lib/cmake/Boost-1.87.0` configuration, avoiding reliance on
+host Boost discovery. The Eigen CMP0146 deprecation, absent Fortran compiler,
+disabled Qt demos and absent nbval messages are harmless for this headers-only
+Eigen installation and disabled tests; they do not indicate another build
+failure in the log.
+
+`scripts/rdkit-intel-wheel/audit.mjs:17` already accepts `/usr/lib/` and
+`/System/` dependencies. Both its delocate dependency check at `:23` and its
+Mach-O load-command check at `:65` therefore allow `/usr/lib/libz.1.dylib`.
+No audit exception is needed. Delocate leaves this system library external;
+every Mach-O shipped in the wheel must still be exactly x86_64 with deployment
+target at most 11.0. All hash checks, action pins, sandbox restrictions and the
+relocated smoke test remain in place.
 
 ## InChI staging and linkage
 
